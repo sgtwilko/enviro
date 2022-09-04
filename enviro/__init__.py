@@ -361,4 +361,17 @@ def sleep():
   logging.debug("  - reset")
 
   # reset the board
-  machine.reset()
+  machine.reset() 
+
+def action():
+  # Check to see if there are any actions that should be carried out.
+  logging.info("> Checking for actions")
+  if model=='grow':
+    targets = [
+      config.moisture_target_1, 
+      config.moisture_target_2,
+      config.moisture_target_3
+    ]
+    return get_board().water(targets)
+  else:
+    return False

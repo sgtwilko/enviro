@@ -22,6 +22,33 @@
 # import enviro firmware, this will trigger provisioning if needed
 import enviro
 
+def process_reading():
+  enviro.logging.info(f"> getting readings from sensors")
+  # take a reading from the onboard sensors
+  reading = enviro.get_sensor_readings()
+
+  # here you can customise the sensor readings by adding extra information
+  # or removing readings that you don't want, for example:
+  # 
+  #   del readings["temperature"]        # remove the temperature reading
+  #
+  #   readings["custom"] = my_reading()  # add my custom reading value
+
+  # is an upload destination set?
+  if enviro.config.destination:
+    # if so cache this reading for upload later
+    enviro.cache_upload(reading)
+
+    # if we have enough cached uploads...
+    if enviro.is_upload_needed():
+      enviro.logging.info(f"> {enviro.cached_upload_count()} cache files need uploading")
+      if not enviro.upload_readings():
+        enviro.halt("! reading upload failed")
+  else:
+    # otherwise save reading to local csv file (look in "/readings")
+    enviro.save_reading(reading)
+
+
 # initialise enviro
 enviro.startup()
 
@@ -45,29 +72,11 @@ if enviro.low_disk_space():
   # are not getting uploaded so warn the user and halt with an error
   enviro.halt("! low disk space")
 
-# take a reading from the onboard sensors
-reading = enviro.get_sensor_readings()
+process_reading()
 
-# here you can customise the sensor readings by adding extra information
-# or removing readings that you don't want, for example:
-# 
-#   del readings["temperature"]        # remove the temperature reading
-#
-#   readings["custom"] = my_reading()  # add my custom reading value
-
-# is an upload destination set?
-if enviro.config.destination:
-  # if so cache this reading for upload later
-  enviro.cache_upload(reading)
-
-  # if we have enough cached uploads...
-  if enviro.is_upload_needed():
-    enviro.logging.info(f"> {enviro.cached_upload_count()} cache files need uploading")
-    if not enviro.upload_readings():
-      enviro.halt("! reading upload failed")
-else:
-  # otherwise save reading to local csv file (look in "/readings")
-  enviro.save_reading(reading)
+# if we need to take an action, do so, then take another set of readings.
+if enviro.action():
+  process_reading()
 
 # go to sleep until our next scheduled reading
 enviro.sleep()

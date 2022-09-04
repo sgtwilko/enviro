@@ -22,6 +22,12 @@ pump_pins = [
   Pin(10, Pin.OUT, value=0)
 ]
 
+pump_runtime = [0, 0, 0]
+
+running_pump = -1
+
+pump_start_tick = 0
+
 def moisture_readings():
   results = []
 
@@ -61,6 +67,26 @@ def moisture_readings():
 
   return results
 
+# Start a pump, making sure it's the only one running
+def start_pump(pump_number):
+  global running_pump, pump_start_tick
+  stop_pump()
+  if pump_number >=0 and pump_number<3:
+    logging.debug(f"      - Starting pump {pump_number}")
+    running_pump = pump_number
+    pump_start_tick = time.ticks_ms()
+    pump_pins[running_pump].value(1)
+        
+# Stop all pumps
+def stop_pump():
+  global running_pump, pump_runtime, pump_start_tick
+  if running_pump>=0:
+    logging.debug(f"      - stopping pump {running_pump}")
+    pump_runtime[running_pump] += time.ticks_diff(time.ticks_ms(), pump_start_tick)
+    running_pump=-1;
+  for i in range(0, 3):
+    pump_pins[i].value(0)
+
 # make a semi convincing drip noise
 def drip_noise():
   piezo_pwm.duty_u16(32768)
@@ -70,28 +96,37 @@ def drip_noise():
       time.sleep(0.02)
   piezo_pwm.duty_u16(0)
 
-def water(moisture_levels):
-  from enviro import config
-  targets = [
-    config.moisture_target_1, 
-    config.moisture_target_2,
-    config.moisture_target_3
-  ]
-
-  for i in range(0, 3):
-    if moisture_levels[i] < targets[i]:
-      # determine a duration to run the pump for
-      duration = round((targets[i] - moisture_levels[i]) / 25, 1)
-
-      if config.auto_water:
-        logging.info(f"> running pump {i} for {duration} second (currently at {int(moisture_levels[i])}, target {targets[i]})")
-        pump_pins[i].value(1)
-        time.sleep(duration)
-        pump_pins[i].value(0)
-      else:
+def water(targets):
+  moisture_levels = moisture_readings()
+  if config.auto_water:
+    logging.debug("  - anything to do")
+    check_for_action = True
+    actioned = False
+    start = time.ticks_ms()
+    # Keep watering until plan it ok, or 60 second timeout expires.
+    while check_for_action and time.ticks_diff(time.ticks_ms(), start)<60000:
+      check_for_action = False
+      logging.debug(moisture_levels)
+      for index, val in enumerate(moisture_levels):
+        # Only water if the value is >0 as this is the default value returned when the sensor isn't in the soil.
+        if val>0 and val<targets[index]:
+          logging.debug(f"      - start pump {index}, {val}<{targets[index]}")
+          check_for_action = True
+          start_pump(index)
+          actioned = True
+        time.sleep(5)
+        stop_pump()
+      # Get the levels after watering to see if we're now over the threshold
+      moisture_levels = moisture_readings()            
+    logging.debug(pump_runtime)
+    return actioned
+  else:
+    for i in range(0, 3):
+      if moisture_levels[i] < targets[i]:
         for j in range(0, i + 1):
           drip_noise()
         time.sleep(0.5)
+    return False # We did't water the plants so nothing has changed.
 
 def get_sensor_readings():
   # bme280 returns the register contents immediately and then starts a new reading
@@ -103,8 +138,6 @@ def get_sensor_readings():
   ltr_data = ltr559.get_reading()
 
   moisture_levels = moisture_readings()
-  
-  water(moisture_levels) # run pumps if needed
 
   from ucollections import OrderedDict
 
