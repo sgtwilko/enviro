@@ -3,6 +3,7 @@ from breakout_bme280 import BreakoutBME280
 from breakout_ltr559 import BreakoutLTR559
 from machine import Pin, PWM
 from enviro import i2c
+from phew import logging
 
 bme280 = BreakoutBME280(i2c, 0x77)
 ltr559 = BreakoutLTR559(i2c)
@@ -14,6 +15,18 @@ moisture_sensor_pins = [
   Pin(14, Pin.IN, Pin.PULL_DOWN),
   Pin(13, Pin.IN, Pin.PULL_DOWN)
 ]
+
+pump_pins = [
+  Pin(12, Pin.OUT),
+  Pin(11, Pin.OUT),
+  Pin(10, Pin.OUT)
+]
+
+pump_runtime = [0, 0, 0]
+
+running_pump = -1
+
+pump_start_tick = 0
 
 def moisture_readings():
   results = []
@@ -84,3 +97,44 @@ def play_tone(frequency = None):
 
 def stop_tone():
   piezo_pwm.duty_u16(0)
+
+def start_pump(pump_number):
+  global running_pump, pump_start_tick
+  stop_pump()
+  if pump_number >=0 and pump_number<3:
+    logging.debug(f"      - Starting pump {pump_number}")
+    running_pump = pump_number
+    pump_start_tick = time.ticks_ms()
+    pump_pins[running_pump].value(1)
+        
+def stop_pump():
+  global running_pump, pump_runtime, pump_start_tick
+  if running_pump>=0:
+    pump_runtime[running_pump] += time.ticks_diff(time.ticks_ms(), pump_start_tick)
+    running_pump=-1;
+  for i in range(0, 3):
+    logging.debug(f"      - stopping pump {i}")
+    pump_pins[i].value(0)
+        
+def actionValues(thresholds):
+  logging.debug("  - anything to do")
+  check_for_action = True
+  actioned = False
+  start = time.ticks_ms()
+  while check_for_action and time.ticks_diff(time.ticks_ms(), start)<60000:
+    check_for_action = False
+    logging.debug("    - Get readings")
+    moisture_data = moisture_readings()
+    for index, val in enumerate(moisture_data):
+      if val>0 and val<thresholds[index]:
+        logging.debug(f"      - start pump {index}, {val}<{thresholds[index]}")
+        check_for_action = True
+        start_pump(index)
+        actioned = True
+      time.sleep(5)
+      stop_pump()            
+  logging.debug(pump_runtime)
+  return actioned   
+
+def stop_actions():
+  stop_pump()

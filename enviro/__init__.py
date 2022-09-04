@@ -362,3 +362,12 @@ def sleep():
 
   # reset the board
   machine.reset()
+
+def action():
+  # Check to see if there are any actions that should be carried out.
+  logging.info("> Checking for actions")
+  if model=='grow':
+    #Would like to get these thresholds from the config file
+    return get_board().actionValues([70, 70, 70])
+  else:
+    return False
