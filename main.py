@@ -23,6 +23,7 @@
 import enviro
 
 def process_reading():
+  enviro.logging.info(f"> getting readings from sensors")
   # take a reading from the onboard sensors
   reading = enviro.get_sensor_readings()
 

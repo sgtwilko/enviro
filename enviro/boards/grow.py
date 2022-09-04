@@ -110,10 +110,10 @@ def start_pump(pump_number):
 def stop_pump():
   global running_pump, pump_runtime, pump_start_tick
   if running_pump>=0:
+    logging.debug(f"      - stopping pump {running_pump}")
     pump_runtime[running_pump] += time.ticks_diff(time.ticks_ms(), pump_start_tick)
     running_pump=-1;
   for i in range(0, 3):
-    logging.debug(f"      - stopping pump {i}")
     pump_pins[i].value(0)
         
 def actionValues(thresholds):
@@ -125,6 +125,7 @@ def actionValues(thresholds):
     check_for_action = False
     logging.debug("    - Get readings")
     moisture_data = moisture_readings()
+    logging.debug(moisture_data)
     for index, val in enumerate(moisture_data):
       if val>0 and val<thresholds[index]:
         logging.debug(f"      - start pump {index}, {val}<{thresholds[index]}")
